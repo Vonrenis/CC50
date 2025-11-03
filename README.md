@@ -23,4 +23,4 @@ Por ter uma ferramenta dessas e apesar de simples muito poderosa
 pois se o usuário colocar uma senha para cada plataforma 
 dificilmente será hackeada em todas
 essa ferramenta é justamente para ter um auxilio nessa parte podendo trazer mais segurança e versatilidade
-Agradeço muito esse curso aprendi muito e estou muito honrado de te-lo completado
+Agradeço muito esse curso aprendi muito e estou muito honrado de te-lo completado.
