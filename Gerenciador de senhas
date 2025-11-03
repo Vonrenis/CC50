@@ -1,0 +1,148 @@
+import sqlite3
+from cryptography.fernet import Fernet
+import hashlib
+import os
+import base64
+
+def create_db():
+    conn = sqlite3.connect("passwords.db")
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS credentials (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    service TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    password_encrypted TEXT NOT NULL
+                )''')
+    conn.commit()
+    conn.close()
+
+def insert_password(service, username, password_encrypted):
+    conn = sqlite3.connect("passwords.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO credentials (service, username, password_encrypted) VALUES (?, ?, ?)",
+              (service, username, password_encrypted))
+    conn.commit()
+    conn.close()
+
+def fetch_all():
+    conn = sqlite3.connect("passwords.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM credentials")
+    data = c.fetchall()
+    conn.close()
+    return data
+
+def search_service(service):
+    conn = sqlite3.connect("passwords.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM credentials WHERE service = ?", (service,))
+    data = c.fetchall()
+    conn.close()
+    return data
+
+def delete_entry(service):
+    conn = sqlite3.connect("passwords.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM credentials WHERE service = ?", (service,))
+    conn.commit()
+    conn.close()
+
+def generate_key(master_password):
+    key = hashlib.sha256(master_password.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+def encrypt_password(fernet, plain_text):
+    return fernet.encrypt(plain_text.encode()).decode()
+
+def decrypt_password(fernet, encrypted_text):
+    try:
+        return fernet.decrypt(encrypted_text.encode()).decode()
+    except Exception:
+        return "[ERRO AO DECIFRAR]"
+
+def hash_master_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_master_password(password, stored_hash):
+    return hash_master_password(password) == stored_hash
+
+MASTER_FILE = "master.txt"
+
+def setup_master_password():
+    if os.path.exists(MASTER_FILE):
+        with open(MASTER_FILE, "r") as f:
+            return f.read().strip()
+    else:
+        password = input("Crie uma senha mestra: ")
+        hashed = hash_master_password(password)
+        with open(MASTER_FILE, "w") as f:
+            f.write(hashed)
+        print("Senha mestra criada com sucesso!\n")
+        return hashed
+
+def main():
+    create_db()
+    master_hash = setup_master_password()
+
+    while True:
+        master_input = input("Digite sua senha mestra: ")
+        if verify_master_password(master_input, master_hash):
+            print("\n✅ Acesso concedido!\n")
+            fernet = generate_key(master_input)
+            break
+        else:
+            print("❌ Senha incorreta. Tente novamente.\n")
+
+    # Menu
+    while True:
+        print("===== GERENCIADOR DE SENHAS =====")
+        print("[1] Adicionar nova senha")
+        print("[2] Ver todas as senhas")
+        print("[3] Buscar por serviço")
+        print("[4] Excluir senha")
+        print("[5] Sair")
+        option = input("Escolha uma opção: ")
+
+        if option == "1":
+            service = input("Serviço: ")
+            username = input("Usuário: ")
+            password = input("Senha: ")
+            encrypted = encrypt_password(fernet, password)
+            insert_password(service, username, encrypted)
+            print("✅ Senha salva com sucesso!\n")
+
+        elif option == "2":
+            data = fetch_all()
+            print("\n--- SENHAS ARMAZENADAS ---")
+            for row in data:
+                decrypted = decrypt_password(fernet, row[3])
+                print(f"Serviço: {row[1]} | Usuário: {row[2]} | Senha: {decrypted}")
+            print()
+
+        elif option == "3":
+            service = input("Serviço: ")
+            data = search_service(service)
+            if data:
+                print("\n--- RESULTADO DA BUSCA ---")
+                for row in data:
+                    decrypted = decrypt_password(fernet, row[3])
+                    print(f"Serviço: {row[1]} | Usuário: {row[2]} | Senha: {decrypted}")
+                print()
+            else:
+                print("Nenhum resultado encontrado.\n")
+
+        elif option == "4":
+            service = input("Serviço a excluir: ")
+            delete_entry(service)
+            print("Serviço excluído com sucesso!\n")
+
+        elif option == "5":
+            print("Saindo...")
+            break
+
+        else:
+            print("Opção inválida.\n")
+
+if __name__ == "__main__":
+    main()
+
